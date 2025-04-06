@@ -11,7 +11,10 @@ export interface Player {
   cards: Card[]
   isCurrentTurn: boolean
   isHuman?: boolean
+  isBot?: boolean
   isHost?: boolean
+  difficulty?: "easy" | "medium" | "hard"
+  calledUno?: boolean
 }
 
 export interface AnimationState {

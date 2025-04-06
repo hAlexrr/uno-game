@@ -37,6 +37,8 @@ export default function MultiplayerLobby() {
 
   const [joinRoomCode, setJoinRoomCode] = useState("")
   const [connectionStatus, setConnectionStatus] = useState("Connecting...")
+  const [showAlert, setShowAlert] = useState(false)
+  const [alertMessage, setAlertMessage] = useState("")
 
   // Monitor connection status
   useEffect(() => {
@@ -52,7 +54,8 @@ export default function MultiplayerLobby() {
     if (!roomCode) return
 
     navigator.clipboard.writeText(roomCode)
-    alert("Room code copied to clipboard!")
+    setAlertMessage("Room code copied to clipboard!")
+    setShowAlert(true)
   }
 
   // Check if the current player is the host
@@ -457,6 +460,12 @@ export default function MultiplayerLobby() {
           </Button>
         )}
       </div>
+      {showAlert && (
+        <Alert variant="default">
+          <AlertTitle>Success</AlertTitle>
+          <AlertDescription>{alertMessage}</AlertDescription>
+        </Alert>
+      )}
     </motion.div>
   )
 }

@@ -83,6 +83,323 @@ function resetGameState(gameState) {
   })
 }
 
+// Add this function to handle bot turns
+function handleBotTurn(gameState, botIndex) {
+  const bot = gameState.players[botIndex]
+
+  // Bot AI logic - find a playable card
+  const playableCards = bot.cards.filter(
+    (card) =>
+      !gameState.topCard ||
+      card.type === "wild" ||
+      card.type === "special" ||
+      gameState.topCard.color === card.color ||
+      gameState.currentColor === card.color ||
+      gameState.topCard.value === card.value,
+  )
+
+  if (playableCards.length > 0) {
+    // Choose a card to play based on difficulty
+    let cardToPlay
+
+    switch (bot.difficulty || "medium") {
+      case "easy":
+        // Play a random valid card
+        cardToPlay = playableCards[Math.floor(Math.random() * playableCards.length)]
+        break
+
+      case "medium":
+        // Prefer action cards and wild cards
+        const actionCards = playableCards.filter(
+          (card) => card.type === "action" || card.type === "wild" || card.type === "special",
+        )
+
+        if (actionCards.length > 0 && Math.random() > 0.3) {
+          cardToPlay = actionCards[Math.floor(Math.random() * actionCards.length)]
+        } else {
+          cardToPlay = playableCards[Math.floor(Math.random() * playableCards.length)]
+        }
+        break
+
+      case "hard":
+        // Strategic play - prioritize number cards first, save special cards
+        const numberCards = playableCards.filter((card) => card.type === "number")
+        const specialCards = playableCards.filter(
+          (card) => card.type === "action" || card.type === "wild" || card.type === "special",
+        )
+
+        if (numberCards.length > 0) {
+          cardToPlay = numberCards[Math.floor(Math.random() * numberCards.length)]
+        } else {
+          cardToPlay = specialCards[Math.floor(Math.random() * specialCards.length)]
+        }
+        break
+
+      default:
+        cardToPlay = playableCards[Math.floor(Math.random() * playableCards.length)]
+    }
+
+    // Remove the card from the bot's hand
+    const cardIndex = bot.cards.findIndex((c) => c.id === cardToPlay.id)
+    bot.cards.splice(cardIndex, 1)
+
+    // Handle wild cards
+    if (cardToPlay.type === "wild" || (cardToPlay.type === "special" && cardToPlay.value === "blank")) {
+      // Choose a color
+      const colors = ["red", "blue", "green", "yellow"]
+      const colorCounts = {}
+
+      // Count the colors in the bot's hand
+      bot.cards.forEach((card) => {
+        if (card.color !== "wild") {
+          colorCounts[card.color] = (colorCounts[card.color] || 0) + 1
+        }
+      })
+
+      // Choose the most common color in hand, or random if none
+      let chosenColor = colors[Math.floor(Math.random() * colors.length)]
+      let maxCount = 0
+
+      Object.entries(colorCounts).forEach(([color, count]) => {
+        if (count > maxCount) {
+          maxCount = count
+          chosenColor = color
+        }
+      })
+
+      // Set the chosen color
+      gameState.currentColor = chosenColor
+
+      // Log the action
+      return {
+        action: "play_wild",
+        card: cardToPlay,
+        color: chosenColor,
+      }
+    }
+
+    // Update the top card and current color
+    gameState.topCard = cardToPlay
+
+    if (cardToPlay.type !== "wild" && cardToPlay.type !== "special") {
+      gameState.currentColor = cardToPlay.color
+    }
+
+    // Check for winner
+    if (bot.cards.length === 0) {
+      return {
+        action: "win",
+        card: cardToPlay,
+      }
+    }
+
+    // Handle card effects
+    if (cardToPlay.value === "skip" || cardToPlay.value === "reverse" || cardToPlay.value === "draw2") {
+      return {
+        action: "play_action",
+        card: cardToPlay,
+      }
+    }
+
+    // Regular card play
+    return {
+      action: "play",
+      card: cardToPlay,
+    }
+  } else {
+    // No playable cards, draw a card
+    const newCard = generateRandomCard(gameState.gameSettings)
+    bot.cards.push(newCard)
+    gameState.cardsRemaining = Math.max(0, gameState.cardsRemaining - 1)
+
+    // Check if the drawn card can be played
+    const canPlay =
+      !gameState.topCard ||
+      newCard.type === "wild" ||
+      newCard.type === "special" ||
+      gameState.topCard.color === newCard.color ||
+      gameState.currentColor === newCard.color ||
+      newCard.value === gameState.topCard.value
+
+    if (canPlay && gameState.gameSettings.playDrawnCard) {
+      // Play the drawn card
+      bot.cards.pop() // Remove the card we just added
+
+      // Handle wild cards
+      if (newCard.type === "wild" || (newCard.type === "special" && newCard.value === "blank")) {
+        // Choose a color
+        const colors = ["red", "blue", "green", "yellow"]
+        const colorCounts = {}
+
+        // Count the colors in the bot's hand
+        bot.cards.forEach((card) => {
+          if (card.color !== "wild") {
+            colorCounts[card.color] = (colorCounts[card.color] || 0) + 1
+          }
+        })
+
+        // Choose the most common color in hand, or random if none
+        let chosenColor = colors[Math.floor(Math.random() * colors.length)]
+        let maxCount = 0
+
+        Object.entries(colorCounts).forEach(([color, count]) => {
+          if (count > maxCount) {
+            maxCount = count
+            chosenColor = color
+          }
+        })
+
+        // Set the chosen color
+        gameState.currentColor = chosenColor
+
+        // Return the action
+        return {
+          action: "play_drawn_wild",
+          card: newCard,
+          color: chosenColor,
+        }
+      }
+
+      // Update the top card and current color
+      gameState.topCard = newCard
+
+      if (newCard.type !== "wild" && newCard.type !== "special") {
+        gameState.currentColor = newCard.color
+      }
+
+      // Handle card effects
+      if (newCard.value === "skip" || newCard.value === "reverse" || newCard.value === "draw2") {
+        return {
+          action: "play_drawn_action",
+          card: newCard,
+        }
+      }
+
+      // Regular card play
+      return {
+        action: "play_drawn",
+        card: newCard,
+      }
+    } else {
+      // Can't play the drawn card
+      return {
+        action: "draw",
+        card: newCard,
+      }
+    }
+  }
+}
+
+// Add a function to process the bot turn after a player's turn
+function processBotTurns(gameState, roomCode) {
+  // Check if the current player is a bot
+  const currentPlayerIndex = gameState.players.findIndex((p) => p.id === gameState.currentPlayerId)
+
+  if (currentPlayerIndex !== -1 && gameState.players[currentPlayerIndex].isBot) {
+    // Add a small delay to make it feel more natural
+    setTimeout(() => {
+      const bot = gameState.players[currentPlayerIndex]
+      console.log(`Bot ${bot.name} is taking its turn`)
+
+      // Handle the bot's turn
+      const result = handleBotTurn(gameState, currentPlayerIndex)
+
+      // Process the result
+      if (result) {
+        switch (result.action) {
+          case "play":
+          case "play_action":
+          case "play_wild":
+            // Log the action
+            io.to(roomCode).emit("game_log", `${bot.name} played ${result.card.color} ${result.card.value}`)
+
+            if (result.action === "play_wild") {
+              io.to(roomCode).emit("game_log", `${bot.name} chose ${result.color}`)
+            }
+
+            // Handle card effects
+            handleCardEffects(gameState, result.card, currentPlayerIndex)
+            break
+
+          case "play_drawn":
+          case "play_drawn_action":
+          case "play_drawn_wild":
+            // Log the action
+            io.to(roomCode).emit("game_log", `${bot.name} drew and played ${result.card.color} ${result.card.value}`)
+
+            if (result.action === "play_drawn_wild") {
+              io.to(roomCode).emit("game_log", `${bot.name} chose ${result.color}`)
+            }
+
+            // Handle card effects
+            handleCardEffects(gameState, result.card, currentPlayerIndex)
+            break
+
+          case "draw":
+            // Log the action
+            io.to(roomCode).emit("game_log", `${bot.name} drew a card`)
+
+            // Move to the next player
+            const nextPlayerIndex = getNextPlayerIndex(gameState, currentPlayerIndex)
+
+            gameState.players.forEach((p, i) => {
+              p.isCurrentTurn = i === nextPlayerIndex
+            })
+
+            gameState.currentPlayerId = gameState.players[nextPlayerIndex].id
+            break
+
+          case "win":
+            // Update scores
+            gameState.scores[bot.name] = (gameState.scores[bot.name] || 0) + 1
+
+            // Broadcast winner
+            io.to(roomCode).emit("game_winner", { playerId: bot.id, playerName: bot.name })
+            io.to(roomCode).emit("game_log", `${bot.name} wins the game!`)
+
+            // End the game
+            gameState.gameStarted = false
+            break
+        }
+
+        // Broadcast the updated game state
+        io.to(roomCode).emit("game_state_update", gameState)
+
+        // If the game is still going and the next player is a bot, process their turn
+        if (gameState.gameStarted) {
+          const nextPlayer = gameState.players.find((p) => p.id === gameState.currentPlayerId)
+
+          if (nextPlayer) {
+            io.to(roomCode).emit("game_log", `${nextPlayer.name}'s turn`)
+
+            if (nextPlayer.isBot) {
+              // Process the next bot's turn
+              processBotTurns(gameState, roomCode)
+            }
+          }
+        }
+      }
+    }, 1000) // 1 second delay for bot turns
+  }
+}
+
+// Add this function to the server.js file to directly trigger bot turns
+// This should be added right after the processBotTurns function
+// Add this function to manually trigger a bot turn
+function triggerBotTurn(roomCode) {
+  const gameState = activeGames[roomCode]
+
+  if (!gameState || !gameState.gameStarted) return
+
+  // Find the current player
+  const currentPlayerIndex = gameState.players.findIndex((p) => p.id === gameState.currentPlayerId)
+
+  if (currentPlayerIndex !== -1 && gameState.players[currentPlayerIndex].isBot) {
+    console.log(`Manually triggering bot turn for ${gameState.players[currentPlayerIndex].name}`)
+    processBotTurns(gameState, roomCode)
+  }
+}
+
 app.prepare().then(() => {
   const server = http.createServer((req, res) => {
     handle(req, res)
@@ -238,7 +555,6 @@ app.prepare().then(() => {
       io.to(roomCode).emit("game_log", "Game settings updated")
     })
 
-    // Handle starting the game
     socket.on("start_game", (roomCode) => {
       const gameState = activeGames[roomCode]
 
@@ -256,6 +572,13 @@ app.prepare().then(() => {
       io.to(roomCode).emit("game_log", "Game started")
       io.to(roomCode).emit("game_log", `Initial card: ${gameState.topCard.color} ${gameState.topCard.value}`)
       io.to(roomCode).emit("game_log", `${gameState.players[0].name}'s turn`)
+
+      // Check if the first player is a bot, and if so, trigger their turn
+      if (gameState.players[0].isBot) {
+        setTimeout(() => {
+          processBotTurns(gameState, roomCode)
+        }, 1000)
+      }
     })
 
     // Handle playing a card
@@ -362,6 +685,9 @@ app.prepare().then(() => {
       if (nextPlayer) {
         io.to(roomCode).emit("game_log", `${nextPlayer.name}'s turn`)
       }
+
+      // After updating the game state and broadcasting it:
+      processBotTurns(gameState, roomCode)
     })
 
     // Handle card effects
@@ -546,6 +872,9 @@ app.prepare().then(() => {
       if (nextPlayer) {
         io.to(roomCode).emit("game_log", `${nextPlayer.name}'s turn`)
       }
+
+      // After updating the game state and broadcasting it:
+      processBotTurns(gameState, roomCode)
     })
 
     // Handle drawing a card
@@ -610,6 +939,9 @@ app.prepare().then(() => {
           io.to(roomCode).emit("game_log", `${nextPlayer.name}'s turn`)
         }
       }
+
+      // After updating the game state and broadcasting it:
+      processBotTurns(gameState, roomCode)
     })
 
     // Add a new handler for drawing again
@@ -648,6 +980,9 @@ app.prepare().then(() => {
       if (nextPlayer) {
         io.to(roomCode).emit("game_log", `${nextPlayer.name}'s turn`)
       }
+
+      // After updating the game state and broadcasting it:
+      processBotTurns(gameState, roomCode)
     })
 
     // Handle calling UNO
@@ -884,6 +1219,11 @@ app.prepare().then(() => {
         io.to(roomCode).emit("game_state_update", gameState)
         io.to(roomCode).emit("game_log", `${bot.name} was removed from the game`)
       }
+    })
+
+    // Add a new socket event handler for triggering bot turns
+    socket.on("trigger_bot_turn", (roomCode) => {
+      triggerBotTurn(roomCode)
     })
 
     // Handle disconnection

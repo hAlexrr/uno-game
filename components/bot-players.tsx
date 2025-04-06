@@ -1,12 +1,14 @@
 "use client"
 
 import { motion, AnimatePresence } from "framer-motion"
-import { Eye, AlertTriangle } from "lucide-react"
+import { Eye, AlertTriangle, EyeOff } from "lucide-react"
 import { useMultiplayerContext } from "@/context/multiplayer-context"
 import { Button } from "@/components/ui/button"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 export default function OtherPlayers() {
-  const { getPlayerPositions, animation, viewPlayerHand, showEmoji, callUnoOnPlayerAction } = useMultiplayerContext()
+  const { getPlayerPositions, animation, viewPlayerHand, showEmoji, callUnoOnPlayerAction, allowViewingHands } =
+    useMultiplayerContext()
 
   return (
     <>
@@ -40,13 +42,36 @@ export default function OtherPlayers() {
               <span className="text-sm font-medium">{player.name}</span>
               <span className="text-xs bg-black/20 dark:bg-white/20 px-1 rounded-full">{player.cards.length}</span>
 
-              <button
-                onClick={() => viewPlayerHand(player.id)}
-                className="ml-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                title={`View ${player.name}'s hand`}
-              >
-                <Eye size={14} />
-              </button>
+              {allowViewingHands ? (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={() => viewPlayerHand(player.id)}
+                        className="ml-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                      >
+                        <Eye size={14} />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>View {player.name}'s hand</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ) : (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button className="ml-1 text-gray-500 cursor-not-allowed opacity-50">
+                        <EyeOff size={14} />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Viewing hands is disabled</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
             </div>
 
             {/* Show 3 cards from the back to represent their hand */}
@@ -78,16 +103,15 @@ export default function OtherPlayers() {
             </div>
 
             {/* Add UNO call button when player has exactly one card - now positioned above the cards */}
-            {player.cards.length === 1 && (
+            {player.cards.length === 1 && !player.calledUno && (
               <Button
                 size="sm"
                 variant="destructive"
                 onClick={() => callUnoOnPlayerAction(player.id)}
-                className="mt-2 flex items-center gap-1"
-                title={`Call UNO on ${player.name}`}
+                className="mt-2 flex items-center gap-1 h-7 px-2 py-0"
               >
-                <AlertTriangle size={14} />
-                <span className="text-xs font-bold">Call UNO!</span>
+                <AlertTriangle size={12} />
+                <span className="text-xs font-bold">UNO!</span>
               </Button>
             )}
 

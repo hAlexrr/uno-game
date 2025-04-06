@@ -126,6 +126,31 @@ type MultiplayerContextType = {
     isActive: boolean
   }>
   startTournament: (playerCount: number) => void
+  allowViewingHands: boolean
+  setAllowViewingHands: (value: boolean) => void
+  triggerBotTurn: () => void
+  showAlert: boolean
+  setShowAlert: (value: boolean) => void
+  alertMessage: string
+  setAlertMessage: (value: string) => void
+  showConfirm: boolean
+  setShowConfirm: (value: boolean) => void
+  confirmMessage: string
+  setConfirmMessage: (value: string) => void
+  confirmCallback: () => void
+  setConfirmCallback: (value: () => void) => void
+  confirmTitle: string
+  setConfirmTitle: (value: string) => void
+  showCustomAlert: (message: string) => void
+  gameStats: {
+    rounds: number
+    cardsPlayed: number
+    specialCardsPlayed: number
+    mostCardsHeld: number
+    longestTurn: number
+    drawCardCount: number
+  }
+  isHost: boolean
 }
 
 const MultiplayerContext = createContext<MultiplayerContextType | undefined>(undefined)
@@ -189,6 +214,25 @@ export function MultiplayerProvider({ children }: { children: ReactNode }) {
       isActive: boolean
     }>
   >([])
+  const [allowViewingHands, setAllowViewingHands] = useState(true)
+
+  // Add these state variables to the MultiplayerProvider component
+  const [showAlert, setShowAlert] = useState(false)
+  const [alertMessage, setAlertMessage] = useState("")
+  const [showConfirm, setShowConfirm] = useState(false)
+  const [confirmMessage, setConfirmMessage] = useState("")
+  const [confirmCallback, setConfirmCallback] = useState<() => void>(() => {})
+  const [confirmTitle, setConfirmTitle] = useState("")
+
+  // Game statistics
+  const [gameStats, setGameStats] = useState({
+    rounds: 0,
+    cardsPlayed: 0,
+    specialCardsPlayed: 0,
+    mostCardsHeld: 0,
+    longestTurn: 0,
+    drawCardCount: 0,
+  })
 
   // Add this at the top of the component:
   const previousGameState = useRef<GameState | null>(null)
@@ -237,6 +281,46 @@ export function MultiplayerProvider({ children }: { children: ReactNode }) {
     // Game state update
     const handleGameStateUpdate = (newGameState: GameState) => {
       console.log("Received game state update:", newGameState)
+
+      // Update game stats
+      if (previousGameState.current && newGameState) {
+        // Count cards played
+        if (previousGameState.current.topCard?.id !== newGameState.topCard?.id) {
+          setGameStats((prev) => ({
+            ...prev,
+            cardsPlayed: prev.cardsPlayed + 1,
+            specialCardsPlayed:
+              prev.specialCardsPlayed +
+              (newGameState.topCard?.type === "action" || newGameState.topCard?.type === "wild" ? 1 : 0),
+          }))
+        }
+
+        // Track most cards held
+        const maxCards = Math.max(...newGameState.players.map((p) => p.cards.length))
+        if (maxCards > gameStats.mostCardsHeld) {
+          setGameStats((prev) => ({
+            ...prev,
+            mostCardsHeld: maxCards,
+          }))
+        }
+
+        // Track draw card count
+        if (newGameState.deck.length < previousGameState.current.deck.length) {
+          setGameStats((prev) => ({
+            ...prev,
+            drawCardCount: prev.drawCardCount + 1,
+          }))
+        }
+
+        // Track rounds
+        if (previousGameState.current.currentPlayerId !== newGameState.currentPlayerId) {
+          setGameStats((prev) => ({
+            ...prev,
+            rounds: prev.rounds + 1,
+          }))
+        }
+      }
+
       setGameState(newGameState)
 
       // Set viewing to own player ID if not set
@@ -289,7 +373,8 @@ export function MultiplayerProvider({ children }: { children: ReactNode }) {
       setShowColorPicker(true)
     }
 
-    // Can play drawn card
+    // Replace the browser alerts with custom alerts
+    // Update the handleCanPlayDrawnCard function
     const handleCanPlayDrawnCard = (data: { cardId: number }) => {
       const player = gameState?.players.find((p) => p.id === playerId)
       if (!player) return
@@ -297,11 +382,25 @@ export function MultiplayerProvider({ children }: { children: ReactNode }) {
       const card = player.cards.find((c) => c.id === data.cardId)
       if (!card) return
 
-      if (confirm(`You drew a ${card.color} ${card.value}. Do you want to play it?`)) {
-        playACard(card)
-      } else if (roomCode) {
-        // End turn
-        endTurn(roomCode)
+      setConfirmTitle("Play Drawn Card")
+      setConfirmMessage(`You drew a ${card.color} ${card.value}. Do you want to play it?`)
+      setConfirmCallback(() => {
+        if (card) {
+          playACard(card)
+        }
+      })
+      setShowConfirm(true)
+    }
+
+    // Update the handleDrawAgain function
+    const handleDrawAgain = () => {
+      if (roomCode) {
+        setConfirmTitle("Draw Again")
+        setConfirmMessage("No playable card. Draw again?")
+        setConfirmCallback(() => {
+          drawAgain(roomCode)
+        })
+        setShowConfirm(true)
       }
     }
 
@@ -335,17 +434,6 @@ export function MultiplayerProvider({ children }: { children: ReactNode }) {
     }
 
     // Draw again (for draw until match)
-    const handleDrawAgain = () => {
-      if (roomCode) {
-        // Ask the user if they want to draw again
-        if (confirm("No playable card. Draw again?")) {
-          drawAgain(roomCode)
-        } else {
-          // End turn if they don't want to draw
-          endTurn(roomCode)
-        }
-      }
-    }
 
     socket.on("game_state_update", handleGameStateUpdate)
     socket.on("game_log", handleGameLog)
@@ -374,7 +462,7 @@ export function MultiplayerProvider({ children }: { children: ReactNode }) {
       socket.off("chat_message", handleChatMessage)
       socket.off("draw_again", handleDrawAgain)
     }
-  }, [socket, gameState, playerId, viewingPlayerId, roomCode])
+  }, [socket, gameState, playerId, viewingPlayerId, roomCode, gameStats])
 
   // Inside the MultiplayerProvider component, add a function to explain rule effects:
 
@@ -461,6 +549,16 @@ export function MultiplayerProvider({ children }: { children: ReactNode }) {
         setViewingPlayerId(result.playerId)
         addToGameLog(`Game created with room code: ${result.roomCode}`)
         setIsHost(true)
+
+        // Reset game stats when creating a new game
+        setGameStats({
+          rounds: 0,
+          cardsPlayed: 0,
+          specialCardsPlayed: 0,
+          mostCardsHeld: 0,
+          longestTurn: 0,
+          drawCardCount: 0,
+        })
       } else {
         setJoinError(result.error || "Failed to create game")
       }
@@ -574,7 +672,14 @@ export function MultiplayerProvider({ children }: { children: ReactNode }) {
   const callUnoAction = () => {
     if (!roomCode) return
 
-    callUno(roomCode)
+    // Check if the player has 1 or 2 cards to allow calling UNO
+    const player = gameState?.players.find((p) => p.id === playerId)
+    if (player && (player.cards.length === 1 || player.cards.length === 2)) {
+      callUno(roomCode)
+    } else {
+      // Show a custom notification instead of an alert
+      addToGameLog("You can only call UNO when you have 1 or 2 cards left!")
+    }
   }
 
   // View another player's hand
@@ -599,6 +704,16 @@ export function MultiplayerProvider({ children }: { children: ReactNode }) {
 
     if (isHost) {
       playAgain(roomCode)
+
+      // Reset game stats for a new game
+      setGameStats({
+        rounds: 0,
+        cardsPlayed: 0,
+        specialCardsPlayed: 0,
+        mostCardsHeld: 0,
+        longestTurn: 0,
+        drawCardCount: 0,
+      })
     }
   }
 
@@ -618,6 +733,16 @@ export function MultiplayerProvider({ children }: { children: ReactNode }) {
     setAnimation({ type: null })
     setGameLog([])
     setChatMessages([])
+
+    // Reset game stats
+    setGameStats({
+      rounds: 0,
+      cardsPlayed: 0,
+      specialCardsPlayed: 0,
+      mostCardsHeld: 0,
+      longestTurn: 0,
+      drawCardCount: 0,
+    })
   }
 
   // Calculate positions for players around a virtual table
@@ -816,6 +941,23 @@ export function MultiplayerProvider({ children }: { children: ReactNode }) {
     })
   }
 
+  // Add this function to the MultiplayerContext
+  // Inside the MultiplayerProvider component, add this function:
+
+  // Trigger bot turn manually
+  const triggerBotTurn = () => {
+    if (!roomCode || !socket) return
+
+    socket.emit("trigger_bot_turn", roomCode)
+  }
+
+  // Add a custom alert function
+  const showCustomAlert = (message: string) => {
+    setAlertMessage(message)
+    setShowAlert(true)
+  }
+
+  // Add this function to the context value object
   return (
     <MultiplayerContext.Provider
       value={{
@@ -891,6 +1033,24 @@ export function MultiplayerProvider({ children }: { children: ReactNode }) {
         tournamentRound,
         tournamentMatches,
         startTournament,
+        allowViewingHands,
+        setAllowViewingHands,
+        triggerBotTurn,
+        showAlert,
+        setShowAlert,
+        alertMessage,
+        setAlertMessage,
+        showConfirm,
+        setShowConfirm,
+        confirmMessage,
+        setConfirmMessage,
+        confirmCallback,
+        setConfirmCallback,
+        confirmTitle,
+        setConfirmTitle,
+        showCustomAlert,
+        gameStats,
+        isHost,
       }}
     >
       {children}

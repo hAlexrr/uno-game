@@ -24,6 +24,7 @@ export default function PlayerHand() {
     playACard,
     sendEmojiReaction,
     isCurrentPlayerTurn,
+    allowViewingHands,
   } = useMultiplayerContext()
 
   if (!gameState || !playerId) return null
@@ -32,6 +33,11 @@ export default function PlayerHand() {
   const viewingPlayer = gameState.players.find((p) => p.id === viewingPlayerId)
 
   if (!currentPlayer) return null
+
+  // If viewing another player's hand but it's not allowed, reset to own hand
+  if (viewingPlayerId !== playerId && !allowViewingHands) {
+    setViewingPlayerId(playerId)
+  }
 
   return (
     <motion.div
@@ -50,15 +56,15 @@ export default function PlayerHand() {
       ) : (
         <>
           <div className="flex justify-between mb-2">
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
               <Button
                 size="sm"
                 variant="outline"
                 onClick={() => setSortedHand(!sortedHand)}
-                className="flex items-center gap-1"
+                className="flex items-center gap-1 h-8"
               >
                 <SortDesc size={14} />
-                {sortedHand ? "Unsort" : "Sort Cards"}
+                <span className="hidden sm:inline">{sortedHand ? "Unsort" : "Sort Cards"}</span>
               </Button>
 
               <TooltipProvider>
@@ -68,10 +74,10 @@ export default function PlayerHand() {
                       size="sm"
                       variant="outline"
                       onClick={() => setShowHint(!showHint)}
-                      className="flex items-center gap-1"
+                      className="flex items-center gap-1 h-8"
                     >
                       <Lightbulb size={14} />
-                      Hint
+                      <span className="hidden sm:inline">Hint</span>
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
@@ -81,12 +87,12 @@ export default function PlayerHand() {
               </TooltipProvider>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
               <Dialog>
                 <DialogTrigger asChild>
-                  <Button size="sm" variant="outline" className="flex items-center gap-1">
+                  <Button size="sm" variant="outline" className="flex items-center gap-1 h-8">
                     <MessageSquare size={14} />
-                    Emojis
+                    <span className="hidden sm:inline">Emojis</span>
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-md">
@@ -151,7 +157,7 @@ export default function PlayerHand() {
       )}
 
       {/* Show other player's cards if viewing them */}
-      {viewingPlayerId !== playerId && viewingPlayer && (
+      {viewingPlayerId !== playerId && viewingPlayer && allowViewingHands && (
         <div className="overflow-x-auto pb-2 mt-4 max-w-full">
           <div className="flex gap-2 min-w-min" style={{ width: "max-content" }}>
             <AnimatePresence>

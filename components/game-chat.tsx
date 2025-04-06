@@ -52,15 +52,21 @@ export default function GameChat() {
     }
   }
 
+  // Move the chat button to a better position
   if (!showChat) {
     return (
       <motion.div
-        className="absolute bottom-[35%] right-2"
-        initial={{ x: 50, opacity: 0 }}
-        animate={{ x: 0, opacity: 1 }}
+        className="absolute bottom-4 right-4 z-30"
+        initial={{ y: 50, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.5 }}
       >
-        <Button size="sm" variant="outline" className="flex items-center gap-1" onClick={() => setShowChat(true)}>
+        <Button
+          size="sm"
+          variant="outline"
+          className="flex items-center gap-1 shadow-md"
+          onClick={() => setShowChat(true)}
+        >
           <MessageSquare size={14} />
           Chat
           {unreadCount > 0 && (

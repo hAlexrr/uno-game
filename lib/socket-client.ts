@@ -193,3 +193,11 @@ export function sendChatMessage(roomCode: string, message: string): void {
   socket.emit("send_chat_message", { roomCode, message })
 }
 
+// Trigger a bot turn manually (for testing)
+export function triggerBotTurn(roomCode: string): void {
+  const socket = getSocket()
+  if (!socket) return
+
+  socket.emit("trigger_bot_turn", { roomCode })
+}
+

@@ -18,11 +18,12 @@ export default function GameStats() {
   const cardsInPlay = gameState.players.reduce((sum, player) => sum + player.cards.length, 0)
   const cardsPercentage = Math.round((cardsInPlay / totalCards) * 100)
 
+  // Move the stats button to a better position
   if (!showStats) {
     return (
       <motion.div
-        className="absolute top-20 right-2" // Changed from left-2 to right-2
-        initial={{ x: 50, opacity: 0 }} // Changed from x: -50 to x: 50
+        className="absolute top-4 right-4" // Changed position to top-right corner
+        initial={{ x: 50, opacity: 0 }}
         animate={{ x: 0, opacity: 1 }}
         transition={{ duration: 0.5 }}
       >
@@ -36,8 +37,8 @@ export default function GameStats() {
 
   return (
     <motion.div
-      className="absolute top-20 right-2 w-48" // Changed from left-2 to right-2
-      initial={{ x: 50, opacity: 0 }} // Changed from x: -50 to x: 50
+      className="absolute top-4 right-4 w-48" // Changed position to top-right corner
+      initial={{ x: 50, opacity: 0 }}
       animate={{ x: 0, opacity: 1 }}
       transition={{ duration: 0.5 }}
     >

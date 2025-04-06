@@ -10,7 +10,7 @@ export default function TurnTimer() {
   const timerRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
-    if (!gameState || !gameState.gameStarted) return
+    if (!gameState || !gameState.gameStartedtedted) return
 
     // Reset timer when turn changes
     setTimeLeft(30)
@@ -53,9 +53,10 @@ export default function TurnTimer() {
 
   if (!gameState?.gameStarted || !isCurrentPlayerTurn()) return null
 
+  // Move the timer completely above the cards instead of overlapping
   return (
     <motion.div
-      className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-[120px]"
+      className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-[280px]" // Moved much higher up
       initial={{ opacity: 0, scale: 0.8 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.3 }}

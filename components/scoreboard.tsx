@@ -15,7 +15,7 @@ export default function Scoreboard() {
 
   return (
     <motion.div
-      className="absolute top-2 left-2"
+      className="absolute top-4 left-4" // Changed position to top-left corner
       initial={{ x: -50, opacity: 0 }}
       animate={{ x: 0, opacity: 1 }}
       transition={{ duration: 0.5 }}
