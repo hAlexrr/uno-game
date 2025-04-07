@@ -14,6 +14,7 @@ import GameChat from "./game-chat"
 import TurnTimer from "./turn-timer"
 import ConfettiEffect from "./confetti-effect"
 import GameStats from "./game-stats"
+import FeatureButtonsContainer from "./feature-buttons-container"
 
 export default function GameBoard() {
   const { gameState, lastAction } = useMultiplayerContext()
@@ -58,6 +59,9 @@ export default function GameBoard() {
         {/* Winner animation */}
         <WinnerScreen />
         <ConfettiEffect />
+
+        {/* Feature buttons container - only visible in lobby */}
+        {!gameState?.gameStarted && <FeatureButtonsContainer />}
       </div>
 
       {/* Player hand area - bottom 30% of the screen */}

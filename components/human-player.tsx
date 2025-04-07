@@ -33,7 +33,9 @@ export default function HumanPlayer() {
 
   if (!currentPlayer) return null
 
+  // Fix the UNO call button logic to only appear when it's the player's turn and they have 2 cards
   const hasOneOrTwoCards = currentPlayer.cards.length <= 2
+  const canCallUno = hasOneOrTwoCards && isCurrentPlayerTurn() && !currentPlayer.calledUno
 
   return (
     <div className="w-full flex flex-col items-center">
@@ -60,7 +62,7 @@ export default function HumanPlayer() {
           {isCurrentPlayerTurn() && <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full">Your Turn</span>}
 
           {/* UNO call button - visible when player has one or two cards and hasn't called UNO yet */}
-          {hasOneOrTwoCards && !currentPlayer.calledUno && (
+          {canCallUno && (
             <Button
               size="sm"
               variant="destructive"
