@@ -10,7 +10,7 @@ export default function TurnTimer() {
   const timerRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
-    if (!gameState || !gameState.gameStartedtedted) return
+    if (!gameState || !gameState.gameStarted) return
 
     // Reset timer when turn changes
     setTimeLeft(30)
@@ -25,6 +25,7 @@ export default function TurnTimer() {
 
     // Start a new timer
     timerRef.current = setInterval(() => {
+      console.log("Timer tick")
       setTimeLeft((prev) => {
         if (prev <= 1) {
           // Time's up - end the turn
