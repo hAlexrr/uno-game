@@ -25,7 +25,6 @@ export default function TurnTimer() {
 
     // Start a new timer
     timerRef.current = setInterval(() => {
-      console.log("Timer tick")
       setTimeLeft((prev) => {
         if (prev <= 1) {
           // Time's up - end the turn
