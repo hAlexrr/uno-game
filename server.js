@@ -16,6 +16,252 @@ const cardColors = ["red", "blue", "green", "yellow"]
 const cardValues = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "skip", "reverse", "draw2"]
 const wildCards = ["wild", "wild4"]
 
+/**
+ * Handles the effects of a card after it's played
+ * @param card The card that was played
+ * @param gameState The current game state
+ * @param playerId The ID of the player who played the card
+ * @returns Updated game state with card effects applied
+ */
+function handleCardEffects(card, gameState, playerId) {
+  // Make a copy of the game state to modify
+  const newGameState = { ...gameState };
+  const players = [...newGameState.players];
+  const currentPlayerIndex = players.findIndex(p => p.id === playerId);
+  
+  // Get the next player in sequence (considering direction)
+  const getNextPlayerIndex = (currentIndex) => {
+    const direction = newGameState.direction || 1;
+    return (currentIndex + direction + players.length) % players.length;
+  };
+  
+  // Add to game log
+  const addToGameLog = (message) => {
+    newGameState.gameLog = [...(newGameState.gameLog || []), message];
+  };
+  
+  // Handle different card types
+  switch (card.type) {
+    case "number":
+      // Number cards have no special effect except for 0 and 7 in Seven-O rule
+      if (newGameState.gameSettings?.sevenORule) {
+        if (card.value === "7") {
+          // Player who played 7 chooses someone to swap hands with
+          // For simplicity, we'll choose the next player
+          const nextPlayerIndex = getNextPlayerIndex(currentPlayerIndex);
+          const nextPlayer = players[nextPlayerIndex];
+          
+          // Store current player's cards (excluding the played card)
+          const currentPlayerCards = players[currentPlayerIndex].cards.filter(c => c.id !== card.id);
+          
+          // Swap hands
+          players[currentPlayerIndex].cards = [...nextPlayer.cards];
+          players[nextPlayerIndex].cards = currentPlayerCards;
+          
+          addToGameLog(`${players[currentPlayerIndex].name} swapped hands with ${nextPlayer.name} (Seven rule)`);
+        }
+        
+        if (card.value === "0") {
+          // Everyone passes their hand to the next player
+          const originalHands = players.map(p => [...p.cards]);
+          
+          players.forEach((player, index) => {
+            const nextIndex = getNextPlayerIndex(index);
+            // Skip the current player's hand as they just played a card
+            if (index === currentPlayerIndex) {
+              players[nextIndex].cards = originalHands[index].filter(c => c.id !== card.id);
+            } else {
+              players[nextIndex].cards = originalHands[index];
+            }
+          });
+          
+          addToGameLog("Everyone rotates their hands! (Zero rule)");
+        }
+      }
+      break;
+      
+    case "action":
+      if (card.value === "skip") {
+        // Skip the next player's turn
+        const nextPlayerIndex = getNextPlayerIndex(currentPlayerIndex);
+        const skippedPlayer = players[nextPlayerIndex];
+        
+        // Set the next-next player as current
+        const nextNextPlayerIndex = getNextPlayerIndex(nextPlayerIndex);
+        newGameState.currentPlayerId = players[nextNextPlayerIndex].id;
+        
+        addToGameLog(`${skippedPlayer.name} was skipped!`);
+      }
+      
+      else if (card.value === "reverse") {
+        // Reverse the direction of play
+        newGameState.direction = -1 * (newGameState.direction || 1);
+        
+        // In a 2-player game, reverse acts like skip
+        if (players.length === 2) {
+          // Current player gets another turn
+          newGameState.currentPlayerId = playerId;
+          addToGameLog("Direction reversed! (Acts as skip in 2-player game)");
+        } else {
+          // Set the previous player as current (which is now the next due to direction change)
+          const nextPlayerIndex = getNextPlayerIndex(currentPlayerIndex);
+          newGameState.currentPlayerId = players[nextPlayerIndex].id;
+          addToGameLog("Direction reversed!");
+        }
+      }
+      
+      else if (card.value === "draw2") {
+        // Next player draws 2 cards and loses their turn
+        const nextPlayerIndex = getNextPlayerIndex(currentPlayerIndex);
+        const nextPlayer = players[nextPlayerIndex];
+        
+        // If stacking is enabled and next player has a draw2, they can play it
+        if (newGameState.gameSettings?.stackingEnabled && 
+            nextPlayer.cards.some(c => c.value === "draw2")) {
+          // We'll handle this in the client logic - just set next player
+          const nextPlayerIndex = getNextPlayerIndex(currentPlayerIndex);
+          newGameState.currentPlayerId = players[nextPlayerIndex].id;
+          newGameState.drawCount = (newGameState.drawCount || 0) + 2;
+          
+          addToGameLog(`Draw 2 played! ${nextPlayer.name} can stack another Draw 2 or draw ${newGameState.drawCount} cards`);
+        } else {
+          // Add 2 new cards to next player's hand
+          for (let i = 0; i < 2; i++) {
+            // In a real implementation, you'd generate actual cards
+            nextPlayer.cards.push({ 
+              id: Math.floor(Math.random() * 10000),
+              color: ["red", "blue", "green", "yellow"][Math.floor(Math.random() * 4)],
+              value: ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"][Math.floor(Math.random() * 10)],
+              type: "number"
+            });
+          }
+          
+          // Skip to the next-next player
+          const nextNextPlayerIndex = getNextPlayerIndex(nextPlayerIndex);
+          newGameState.currentPlayerId = players[nextNextPlayerIndex].id;
+          
+          // Reset draw count if it was being tracked
+          newGameState.drawCount = 0;
+          
+          addToGameLog(`${nextPlayer.name} draws 2 cards and loses their turn`);
+        }
+      }
+      break;
+      
+    case "wild":
+      // Wild cards require color selection
+      // The color should be set by the client before calling this function
+      if (card.value === "wild4") {
+        // Next player draws 4 cards and loses their turn
+        const nextPlayerIndex = getNextPlayerIndex(currentPlayerIndex);
+        const nextPlayer = players[nextPlayerIndex];
+        
+        // If stacking is enabled and next player has a wild4, they can play it
+        if (newGameState.gameSettings?.stackingEnabled && 
+            nextPlayer.cards.some(c => c.value === "wild4")) {
+          // We'll handle this in the client logic - just set next player
+          newGameState.currentPlayerId = players[nextPlayerIndex].id;
+          newGameState.drawCount = (newGameState.drawCount || 0) + 4;
+          
+          addToGameLog(`Wild Draw 4 played! ${nextPlayer.name} can stack another Wild Draw 4 or draw ${newGameState.drawCount} cards`);
+        } else {
+          // If challenge rule is enabled, next player can challenge
+          if (newGameState.gameSettings?.challengeRule) {
+            // We'll handle this in the client logic
+            newGameState.canChallenge = true;
+            newGameState.challengePlayerId = nextPlayer.id;
+            newGameState.challengeTargetId = playerId;
+            
+            addToGameLog(`${nextPlayer.name} can challenge the Wild Draw 4!`);
+          } else {
+            // Add 4 new cards to next player's hand
+            for (let i = 0; i < 4; i++) {
+              // In a real implementation, you'd generate actual cards
+              nextPlayer.cards.push({ 
+                id: Math.floor(Math.random() * 10000),
+                color: ["red", "blue", "green", "yellow"][Math.floor(Math.random() * 4)],
+                value: ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"][Math.floor(Math.random() * 10)],
+                type: "number"
+              });
+            }
+            
+            // Skip to the next-next player
+            const nextNextPlayerIndex = getNextPlayerIndex(nextPlayerIndex);
+            newGameState.currentPlayerId = players[nextNextPlayerIndex].id;
+            
+            // Reset draw count if it was being tracked
+            newGameState.drawCount = 0;
+            
+            addToGameLog(`${nextPlayer.name} draws 4 cards and loses their turn`);
+          }
+        }
+      } else {
+        // Regular wild card - just set the next player
+        const nextPlayerIndex = getNextPlayerIndex(currentPlayerIndex);
+        newGameState.currentPlayerId = players[nextPlayerIndex].id;
+      }
+      break;
+      
+    case "special":
+      if (card.value === "swap") {
+        // Swap hands with another player
+        // For simplicity, we'll choose a random player
+        const otherPlayers = players.filter(p => p.id !== playerId);
+        const randomIndex = Math.floor(Math.random() * otherPlayers.length);
+        const randomPlayer = otherPlayers[randomIndex];
+        const randomPlayerIndex = players.findIndex(p => p.id === randomPlayer.id);
+        
+        // Store current player's cards (excluding the played card)
+        const currentPlayerCards = players[currentPlayerIndex].cards.filter(c => c.id !== card.id);
+        
+        // Swap hands
+        players[currentPlayerIndex].cards = [...randomPlayer.cards];
+        players[randomPlayerIndex].cards = currentPlayerCards;
+        
+        // Set next player
+        const nextPlayerIndex = getNextPlayerIndex(currentPlayerIndex);
+        newGameState.currentPlayerId = players[nextPlayerIndex].id;
+        
+        addToGameLog(`${players[currentPlayerIndex].name} swapped hands with ${randomPlayer.name}!`);
+      }
+      
+      else if (card.value === "blank") {
+        // Blank card - just set the next player
+        const nextPlayerIndex = getNextPlayerIndex(currentPlayerIndex);
+        newGameState.currentPlayerId = players[nextPlayerIndex].id;
+      }
+      break;
+  }
+  
+  // Update the players array in the game state
+  newGameState.players = players;
+  
+  // Set the top card
+  newGameState.topCard = card;
+  
+  // If the card is not a wild card, update the current color
+  if (card.type !== "wild" && card.type !== "special") {
+    newGameState.currentColor = card.color;
+  }
+  
+  // Check if the player has won
+  const currentPlayer = players[currentPlayerIndex];
+  if (currentPlayer.cards.length === 0) {
+    newGameState.winner = currentPlayer;
+    addToGameLog(`${currentPlayer.name} wins the game!`);
+  }
+  
+  // Check if the player has one card left (UNO situation)
+  if (currentPlayer.cards.length === 1) {
+    newGameState.unoSituation = {
+      playerId: currentPlayer.id,
+      playerName: currentPlayer.name
+    };
+  }
+  
+  return newGameState;
+}
+
 // Generate a random card
 function generateRandomCard(gameSettings) {
   const isWild = Math.random() > 0.8
@@ -291,7 +537,7 @@ function handleBotTurn(gameState, botIndex) {
 }
 
 // Add a function to process the bot turn after a player's turn
-function processBotTurns(gameState, roomCode) {
+function processBotTurns(gameState, roomCode, io) {
   // Check if the current player is a bot
   const currentPlayerIndex = gameState.players.findIndex((p) => p.id === gameState.currentPlayerId)
 
@@ -374,7 +620,7 @@ function processBotTurns(gameState, roomCode) {
 
             if (nextPlayer.isBot) {
               // Process the next bot's turn
-              processBotTurns(gameState, roomCode)
+              processBotTurns(gameState, roomCode, io)
             }
           }
         }
@@ -396,7 +642,7 @@ function triggerBotTurn(roomCode) {
 
   if (currentPlayerIndex !== -1 && gameState.players[currentPlayerIndex].isBot) {
     console.log(`Manually triggering bot turn for ${gameState.players[currentPlayerIndex].name}`)
-    processBotTurns(gameState, roomCode)
+    processBotTurns(gameState, roomCode, io)
   }
 }
 
@@ -576,7 +822,7 @@ app.prepare().then(() => {
       // Check if the first player is a bot, and if so, trigger their turn
       if (gameState.players[0].isBot) {
         setTimeout(() => {
-          processBotTurns(gameState, roomCode)
+          processBotTurns(gameState, roomCode, io)
         }, 1000)
       }
     })
@@ -687,7 +933,7 @@ app.prepare().then(() => {
       }
 
       // After updating the game state and broadcasting it:
-      processBotTurns(gameState, roomCode)
+      processBotTurns(gameState, roomCode, io)
     })
 
     // Handle card effects
@@ -874,7 +1120,7 @@ app.prepare().then(() => {
       }
 
       // After updating the game state and broadcasting it:
-      processBotTurns(gameState, roomCode)
+      processBotTurns(gameState, roomCode, io)
     })
 
     // Handle drawing a card
@@ -941,7 +1187,7 @@ app.prepare().then(() => {
       }
 
       // After updating the game state and broadcasting it:
-      processBotTurns(gameState, roomCode)
+      processBotTurns(gameState, roomCode, io)
     })
 
     // Add a new handler for drawing again
@@ -982,7 +1228,7 @@ app.prepare().then(() => {
       }
 
       // After updating the game state and broadcasting it:
-      processBotTurns(gameState, roomCode)
+      processBotTurns(gameState, roomCode, io)
     })
 
     // Handle calling UNO
@@ -1223,7 +1469,7 @@ app.prepare().then(() => {
 
     // Add a new socket event handler for triggering bot turns
     socket.on("trigger_bot_turn", (roomCode) => {
-      triggerBotTurn(roomCode)
+      triggerBotTurn(roomCode, io)
     })
 
     // Handle disconnection
