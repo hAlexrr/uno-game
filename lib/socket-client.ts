@@ -7,7 +7,7 @@ let socket: Socket | null = null
 export function initializeSocket(): Socket {
   if (!socket) {
     // For development, use a fixed URL
-    const serverUrl = "http://localhost:3000"
+    const serverUrl = "http://50.116.25.123:3000"
 
     socket = io(serverUrl, {
       reconnection: true,
